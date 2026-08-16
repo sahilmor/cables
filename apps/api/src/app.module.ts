@@ -16,6 +16,8 @@ import { CartModule } from './cart/cart.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ManufacturingModule } from './manufacturing/manufacturing.module';
+import { CouponsModule } from './coupons/coupons.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -37,6 +39,8 @@ import { ManufacturingModule } from './manufacturing/manufacturing.module';
     OrdersModule,
     PaymentsModule,
     ManufacturingModule,
+    CouponsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

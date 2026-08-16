@@ -1,10 +1,10 @@
 'use client';
 
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { ConnectorDto, ConnectorPinDto } from '@cables/types';
 import { Badge } from '@/components/ui/badge';
-import { Cpu, Zap, Shield, Radio, Volume2 } from 'lucide-react';
+import { Cpu, Zap, Shield, Radio, Volume2, Filter } from 'lucide-react';
 
 interface ConnectorNodeData {
   connector: ConnectorDto;
@@ -36,6 +36,14 @@ const getPinTypeBadge = (type: string) => {
 export const ConnectorNode = memo(({ data }: { data: ConnectorNodeData }) => {
   const { connector, side, connectedPinIds, selectedSourcePinId, onPinClick } = data;
   const isSource = side === 'left';
+  const [pinFilter, setPinFilter] = useState<'ALL' | 'DATA' | 'POWER' | 'REQUIRED'>('ALL');
+
+  const filteredPins = connector.pins.filter((pin) => {
+    if (pinFilter === 'REQUIRED') return pin.required;
+    if (pinFilter === 'POWER') return pin.type === 'POWER' || pin.type === 'GROUND';
+    if (pinFilter === 'DATA') return pin.type === 'HIGH_SPEED_DIFFERENTIAL' || pin.type === 'DATA_PLUS' || pin.type === 'DATA_MINUS';
+    return true;
+  });
 
   return (
     <div className="w-80 rounded-xl border border-slate-700/80 bg-[#0d131f]/95 shadow-2xl backdrop-blur-md overflow-hidden text-slate-100">
@@ -60,9 +68,29 @@ export const ConnectorNode = memo(({ data }: { data: ConnectorNodeData }) => {
         </Badge>
       </div>
 
+      {/* Quick Pin Filter Pills for High-Density Connectors */}
+      {connector.pins.length > 6 && (
+        <div className="px-2.5 py-1.5 bg-slate-950/60 border-b border-slate-800/60 flex items-center gap-1 overflow-x-auto text-[10px]">
+          <span className="text-slate-500 font-mono text-[9px] mr-1">Filter:</span>
+          {(['ALL', 'DATA', 'POWER', 'REQUIRED'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setPinFilter(f)}
+              className={`px-2 py-0.5 rounded transition font-medium ${
+                pinFilter === f
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-400 hover:text-slate-200 bg-slate-900'
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Pin list */}
       <div className="p-2 space-y-1.5 max-h-[460px] overflow-y-auto">
-        {connector.pins.map((pin) => {
+        {filteredPins.map((pin) => {
           const isConnected = connectedPinIds.has(pin.id);
           const isSelectedSource = selectedSourcePinId === pin.id;
 
@@ -86,7 +114,7 @@ export const ConnectorNode = memo(({ data }: { data: ConnectorNodeData }) => {
                 <span className="font-mono text-slate-400 text-[11px] shrink-0">
                   P{pin.pinNumber}
                 </span>
-                <span className="font-medium text-white truncate text-xs" title={pin.name}>
+                <span className="font-medium text-white truncate text-xs" title={pin.description || pin.name}>
                   {pin.name}
                   {pin.required && <span className="text-red-400 ml-0.5">*</span>}
                 </span>

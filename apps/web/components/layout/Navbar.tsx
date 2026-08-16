@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -16,11 +17,45 @@ import {
   Wrench,
   LogOut,
   Sparkles,
+  Bell,
+  CheckCircle2,
+  Info,
 } from 'lucide-react';
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, signOut, switchDemoRole } = useAuth();
+  const { user, token, signOut, switchDemoRole } = useAuth();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifs, setShowNotifs] = useState(false);
+
+  useEffect(() => {
+    async function loadNotifs() {
+      try {
+        const data = await apiClient<any[]>('/notifications', {
+          token: token || undefined,
+        });
+        setNotifications(data);
+      } catch {
+        // Default fallback notifications
+        setNotifications([
+          {
+            id: 'n1',
+            title: 'Welcome to CableCraft',
+            message: 'Visual React Flow custom wiring builder active.',
+            type: 'INFO',
+            isRead: false,
+          },
+        ]);
+      }
+    }
+    loadNotifs();
+  }, [token]);
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const handleMarkAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-800 bg-[#0b0f17]/85 backdrop-blur-md">
@@ -66,7 +101,7 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Quick Demo Role Switcher for seamless review */}
+          {/* Quick Demo Role Switcher */}
           <div className="hidden lg:flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs">
             <span className="text-slate-500 px-1.5 font-mono">Role:</span>
             <button
@@ -112,6 +147,55 @@ export function Navbar() {
               </Button>
             </Link>
           )}
+
+          {/* Notifications Dropdown */}
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowNotifs(!showNotifs)}
+              className="relative text-slate-300 hover:text-white"
+              title="Notifications"
+            >
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-blue-500 ring-2 ring-slate-900" />
+              )}
+            </Button>
+
+            {showNotifs && (
+              <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-slate-900 border border-slate-800 p-4 shadow-2xl space-y-3 z-50">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="text-xs font-semibold text-white">Notifications</span>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-[11px] text-blue-400 hover:underline"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      className={`p-2.5 rounded-lg text-xs space-y-1 ${
+                        n.isRead ? 'bg-slate-950/40 text-slate-400' : 'bg-blue-950/20 text-slate-200 border border-blue-500/20'
+                      }`}
+                    >
+                      <div className="font-semibold text-white flex items-center gap-1.5">
+                        <Info className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                        <span>{n.title}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-tight">{n.message}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <Link href="/cart">
             <Button variant="ghost" size="icon" className="relative text-slate-300 hover:text-white" title="Cart">

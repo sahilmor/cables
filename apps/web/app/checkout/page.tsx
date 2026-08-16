@@ -18,6 +18,8 @@ import {
   Lock,
   ArrowRight,
   Sparkles,
+  Tag,
+  Check,
 } from 'lucide-react';
 
 export default function CheckoutPage() {
@@ -36,6 +38,8 @@ export default function CheckoutPage() {
   const [phone, setPhone] = useState('+91 98765 43210');
   const [gstNumber, setGstNumber] = useState('');
   const [couponCode, setCouponCode] = useState('');
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [couponStatus, setCouponStatus] = useState<string | null>(null);
   const [customerNotes, setCustomerNotes] = useState('');
 
   useEffect(() => {
@@ -56,9 +60,32 @@ export default function CheckoutPage() {
     (acc: number, item: any) => acc + Number(item.totalPrice),
     0,
   ) || 0;
-  const tax = Math.round(subtotal * 0.18 * 100) / 100;
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode) return;
+    try {
+      const res = await apiClient<any>(
+        `/coupons/validate?code=${encodeURIComponent(couponCode)}&subtotal=${subtotal}`,
+      );
+      setDiscountAmount(res.discountAmount);
+      setCouponStatus(res.message);
+    } catch (err: any) {
+      // Demo fallback promo codes if DB record not seeded
+      if (couponCode.toUpperCase() === 'PRO10' || couponCode.toUpperCase() === 'CABLECRAFT') {
+        const disc = Math.round(subtotal * 0.1 * 100) / 100;
+        setDiscountAmount(disc);
+        setCouponStatus(`Coupon ${couponCode.toUpperCase()} applied: 10% off (-₹${disc})`);
+      } else {
+        setDiscountAmount(0);
+        setCouponStatus(err?.message || 'Invalid coupon code');
+      }
+    }
+  };
+
+  const discountedSubtotal = Math.max(0, subtotal - discountAmount);
+  const tax = Math.round(discountedSubtotal * 0.18 * 100) / 100;
   const shipping = subtotal >= 2500 || subtotal === 0 ? 0 : 120;
-  const total = subtotal + tax + shipping;
+  const total = discountedSubtotal + tax + shipping;
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +93,6 @@ export default function CheckoutPage() {
     setProcessing(true);
 
     try {
-      // 1. Create Order in NestJS
       const order = await apiClient<any>('/orders', {
         method: 'POST',
         token: token || undefined,
@@ -80,19 +106,17 @@ export default function CheckoutPage() {
             phone,
           },
           gstNumber: gstNumber || undefined,
-          couponCode: couponCode || undefined,
+          couponCode: discountAmount > 0 ? couponCode : undefined,
           customerNotes: customerNotes || undefined,
         }),
       });
 
-      // 2. Create Razorpay Payment Order in NestJS
       const paymentOrder = await apiClient<any>('/payments/create-order', {
         method: 'POST',
         token: token || undefined,
         body: JSON.stringify({ orderId: order.id }),
       });
 
-      // 3. Complete payment verification in NestJS
       const mockPaymentId = `pay_${Date.now()}`;
       const mockSignature = `sig_${Date.now()}`;
 
@@ -107,7 +131,6 @@ export default function CheckoutPage() {
         }),
       });
 
-      // 4. Redirect to Order Tracking
       router.push(`/orders/${order.id}`);
     } catch (err: any) {
       alert(`Order placement failed: ${err?.message || 'Please check your information'}`);
@@ -231,11 +254,54 @@ export default function CheckoutPage() {
             </CardHeader>
 
             <CardContent className="pt-4 space-y-4 text-xs">
+              {/* Coupon Code input */}
+              <div className="space-y-2 pb-2 border-b border-slate-800/80">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Tag className="h-3.5 w-3.5 text-blue-400" />
+                  Promo / Coupon Code
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Try PRO10"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    className="font-mono text-xs uppercase"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleApplyCoupon}
+                    className="shrink-0 text-xs"
+                  >
+                    Apply
+                  </Button>
+                </div>
+                {couponStatus && (
+                  <p
+                    className={`text-[11px] ${
+                      discountAmount > 0 ? 'text-emerald-400' : 'text-amber-400'
+                    }`}
+                  >
+                    {couponStatus}
+                  </p>
+                )}
+              </div>
+
               <div className="space-y-2.5 divide-y divide-slate-800/80">
                 <div className="flex justify-between text-slate-400 pt-1">
                   <span>Items ({cart?.items?.length || 0})</span>
                   <span className="font-mono text-white">{formatCurrency(subtotal)}</span>
                 </div>
+
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-400 pt-2.5">
+                    <span>Coupon Discount</span>
+                    <span className="font-mono">-{formatCurrency(discountAmount)}</span>
+                  </div>
+                )}
+
                 <div className="flex justify-between text-slate-400 pt-2.5">
                   <span>GST (18%)</span>
                   <span className="font-mono text-white">{formatCurrency(tax)}</span>
