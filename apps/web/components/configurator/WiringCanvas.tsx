@@ -29,6 +29,9 @@ import {
   Zap,
   Trash2,
   HelpCircle,
+  Activity,
+  Gauge,
+  Radio,
 } from 'lucide-react';
 
 interface WiringCanvasProps {
@@ -57,6 +60,7 @@ function InnerWiringCanvas({
   onValidate,
 }: WiringCanvasProps) {
   const [selectedSourcePin, setSelectedSourcePin] = useState<ConnectorPinDto | null>(null);
+  const [isSimulating, setIsSimulating] = useState(false);
 
   // Set of connected pin IDs
   const connectedPinIds = useMemo(() => {
@@ -74,7 +78,6 @@ function InnerWiringCanvas({
       if (side === 'left') {
         setSelectedSourcePin((prev) => (prev?.id === pin.id ? null : pin));
       } else if (side === 'right' && selectedSourcePin) {
-        // Connect selected source pin to this target pin
         const exists = connections.some(
           (c) => c.sourcePinId === selectedSourcePin.id && c.targetPinId === pin.id,
         );
@@ -132,7 +135,6 @@ function InnerWiringCanvas({
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
 
-  // Sync node data changes
   useEffect(() => {
     setNodes(initialNodes);
   }, [initialNodes, setNodes]);
@@ -164,13 +166,14 @@ function InnerWiringCanvas({
         target: 'node-end2',
         targetHandle: conn.targetPinId,
         type: 'wire',
+        animated: isSimulating,
         data: {
           wireColor: conn.wireColor || '#3B82F6',
           onDelete: handleDeleteEdge,
         },
       };
     });
-  }, [connections, handleDeleteEdge]);
+  }, [connections, handleDeleteEdge, isSimulating]);
 
   // Handle drag-and-drop connection
   const onConnect = useCallback(
@@ -199,7 +202,6 @@ function InnerWiringCanvas({
     [connections, connector1.pins, onChangeConnections],
   );
 
-  // Auto-wire 1:1 Preset
   const handleAutoWire = () => {
     const minPins = Math.min(connector1.pins.length, connector2.pins.length);
     const newConns: WireConnectionDto[] = [];
@@ -244,6 +246,22 @@ function InnerWiringCanvas({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Signal Simulation Mode Toggle */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsSimulating(!isSimulating)}
+            className={`text-xs gap-1.5 transition ${
+              isSimulating
+                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30'
+                : 'border-slate-700 hover:bg-slate-800 text-slate-300'
+            }`}
+          >
+            <Activity className={`h-3.5 w-3.5 ${isSimulating ? 'text-emerald-400 animate-pulse' : ''}`} />
+            {isSimulating ? 'Simulation Active' : 'Simulate Signals'}
+          </Button>
+
           <Button
             type="button"
             variant="outline"
@@ -267,6 +285,25 @@ function InnerWiringCanvas({
           </Button>
         </div>
       </div>
+
+      {/* Signal Simulation Real-time Telemetry Bar */}
+      {isSimulating && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300 font-mono">
+          <div className="flex items-center gap-2">
+            <Radio className="h-4 w-4 text-emerald-400 animate-pulse" />
+            <span>Clock Sync: 100.0%</span>
+          </div>
+          <div>
+            <span>Diff Impedance: 100 ± 5 Ω</span>
+          </div>
+          <div>
+            <span>Loop Resistance: 0.18 Ω</span>
+          </div>
+          <div>
+            <span>Propagation Delay: ~4.9 ns/m</span>
+          </div>
+        </div>
+      )}
 
       {/* React Flow Interactive Canvas */}
       <div className="h-[580px] w-full rounded-2xl border border-slate-800 bg-[#070b12] overflow-hidden relative shadow-2xl">
