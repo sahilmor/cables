@@ -1,0 +1,421 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  MANUFACTURING
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  CONFIRMED
+  MANUFACTURING
+  QUALITY_CHECK
+  READY_TO_SHIP
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum CableShieldingType {
+  UNSHIELDED
+  FOIL_SHIELDED
+  BRAIDED_SHIELDED
+  DOUBLE_SHIELDED
+}
+
+enum JacketMaterial {
+  PVC
+  TPE
+  SILICONE
+  BRAIDED_NYLON
+  PUR
+}
+
+enum PinType {
+  POWER
+  GROUND
+  DATA_PLUS
+  DATA_MINUS
+  CLOCK
+  SHIELD
+  ANALOG_AUDIO
+  GENERAL_SIGNAL
+  HIGH_SPEED_DIFFERENTIAL
+}
+
+model User {
+  id            String         @id @default(uuid())
+  supabaseUid   String         @unique
+  email         String         @unique
+  fullName      String?
+  role          Role           @default(CUSTOMER)
+  phone         String?
+  addresses     Address[]
+  customCables  CustomCable[]
+  cart          Cart?
+  orders        Order[]
+  wishlists     Wishlist[]
+  notifications Notification[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([supabaseUid])
+}
+
+model Address {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String   @default("SHIPPING")
+  street     String
+  city       String
+  state      String
+  postalCode String
+  country    String   @default("India")
+  phone      String
+  isDefault  Boolean  @default(false)
+  orders     Order[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  imageUrl    String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id             String         @id @default(uuid())
+  name           String
+  slug           String         @unique
+  sku            String         @unique
+  description    String
+  price          Decimal        @db.Decimal(10, 2)
+  compareAtPrice Decimal?       @db.Decimal(10, 2)
+  stock          Int            @default(0)
+  cableType      String?
+  connectorType  String?
+  lengthOptions  String[]       @default(["1m", "2m", "3m", "5m"])
+  specifications Json?
+  status         String         @default("ACTIVE")
+  categoryId     String
+  category       Category       @relation(fields: [categoryId], references: [id])
+  images         ProductImage[]
+  cartItems      CartItem[]
+  orderItems     OrderItem[]
+  wishlistItems  WishlistItem[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([slug])
+  @@index([sku])
+}
+
+model ProductImage {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Connector {
+  id           String                   @id @default(uuid())
+  name         String
+  slug         String                   @unique
+  type         String
+  description  String?
+  imageUrl     String?
+  numberOfPins Int
+  basePrice    Decimal                  @db.Decimal(10, 2)
+  isActive     Boolean                  @default(true)
+  pins         ConnectorPin[]
+  sourceCables CustomCable[]            @relation("Connector1")
+  targetCables CustomCable[]            @relation("Connector2")
+  compatSource ConnectorCompatibility[] @relation("SourceConnector")
+  compatTarget ConnectorCompatibility[] @relation("TargetConnector")
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([slug])
+}
+
+model ConnectorPin {
+  id                       String                  @id @default(uuid())
+  connectorId              String
+  connector                Connector               @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+  pinNumber                Int
+  name                     String
+  description              String?
+  type                     PinType                 @default(GENERAL_SIGNAL)
+  color                    String                  @default("#3B82F6")
+  position                 Int                     @default(0)
+  required                 Boolean                 @default(false)
+  allowMultipleConnections Boolean                 @default(false)
+  isActive                 Boolean                 @default(true)
+  sourceConnections        CustomCableConnection[] @relation("SourcePin")
+  targetConnections        CustomCableConnection[] @relation("TargetPin")
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+
+  @@unique([connectorId, pinNumber])
+}
+
+model ConnectorCompatibility {
+  id                String    @id @default(uuid())
+  sourceConnectorId String
+  targetConnectorId String
+  sourceConnector   Connector @relation("SourceConnector", fields: [sourceConnectorId], references: [id], onDelete: Cascade)
+  targetConnector   Connector @relation("TargetConnector", fields: [targetConnectorId], references: [id], onDelete: Cascade)
+  isCompatible      Boolean   @default(true)
+  specialRules      Json?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([sourceConnectorId, targetConnectorId])
+}
+
+model CableTypeConfig {
+  id            String             @id @default(uuid())
+  name          String
+  slug          String             @unique
+  pricePerMeter Decimal            @db.Decimal(10, 2)
+  shielding     CableShieldingType @default(FOIL_SHIELDED)
+  jacket        JacketMaterial     @default(PVC)
+  colorOptions  String[]           @default(["#000000", "#FFFFFF", "#1E40AF", "#DC2626"])
+  gaugeAWG      Int                @default(24)
+  maxConductors Int                @default(16)
+  isActive      Boolean            @default(true)
+  customCables  CustomCable[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+}
+
+model CustomCable {
+  id               String                  @id @default(uuid())
+  userId           String?
+  user             User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name             String                  @default("Custom Cable Configuration")
+  connector1Id     String
+  connector1       Connector               @relation("Connector1", fields: [connector1Id], references: [id])
+  connector2Id     String
+  connector2       Connector               @relation("Connector2", fields: [connector2Id], references: [id])
+  cableTypeId      String
+  cableType        CableTypeConfig         @relation(fields: [cableTypeId], references: [id])
+  lengthMeters     Decimal                 @db.Decimal(5, 2)
+  cableColor       String                  @default("#000000")
+  jacketMaterial   JacketMaterial          @default(PVC)
+  shieldingType    CableShieldingType      @default(FOIL_SHIELDED)
+  notes            String?
+  isValid          Boolean                 @default(false)
+  validationReport Json?
+  calculatedPrice  Decimal                 @db.Decimal(10, 2)
+  priceBreakdown   Json
+  isTemplate       Boolean                 @default(false)
+  connections      CustomCableConnection[]
+  cartItems        CartItem[]
+  orderItems       OrderItem[]
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+}
+
+model CustomCableConnection {
+  id            String       @id @default(uuid())
+  customCableId String
+  customCable   CustomCable  @relation(fields: [customCableId], references: [id], onDelete: Cascade)
+  sourcePinId   String
+  sourcePin     ConnectorPin @relation("SourcePin", fields: [sourcePinId], references: [id], onDelete: Cascade)
+  targetPinId   String
+  targetPin     ConnectorPin @relation("TargetPin", fields: [targetPinId], references: [id], onDelete: Cascade)
+  wireColor     String?
+  label         String?
+  createdAt     DateTime     @default(now())
+
+  @@unique([customCableId, sourcePinId, targetPinId])
+}
+
+model PricingRule {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  baseAssemblyFee Decimal  @db.Decimal(10, 2) @default(150.00)
+  perPinFee       Decimal  @db.Decimal(10, 2) @default(15.00)
+  taxRatePercent  Decimal  @db.Decimal(5, 2)  @default(18.00)
+  shippingFee     Decimal  @db.Decimal(10, 2) @default(100.00)
+  freeShippingMin Decimal  @db.Decimal(10, 2) @default(2000.00)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String?    @unique
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?    @unique
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id            String       @id @default(uuid())
+  cartId        String
+  cart          Cart         @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId     String?
+  product       Product?     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customCableId String?
+  customCable   CustomCable? @relation(fields: [customCableId], references: [id], onDelete: Cascade)
+  quantity      Int          @default(1)
+  unitPrice     Decimal      @db.Decimal(10, 2)
+  totalPrice    Decimal      @db.Decimal(10, 2)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model Order {
+  id                String             @id @default(uuid())
+  orderNumber       String             @unique
+  userId            String
+  user              User               @relation(fields: [userId], references: [id])
+  shippingAddressId String
+  shippingAddress   Address            @relation(fields: [shippingAddressId], references: [id])
+  status            OrderStatus        @default(PENDING_PAYMENT)
+  subtotal          Decimal            @db.Decimal(10, 2)
+  taxAmount         Decimal            @db.Decimal(10, 2)
+  shippingFee       Decimal            @db.Decimal(10, 2)
+  discountAmount    Decimal            @db.Decimal(10, 2) @default(0.00)
+  totalAmount       Decimal            @db.Decimal(10, 2)
+  gstNumber         String?
+  customerNotes     String?
+  couponCode        String?
+  items             OrderItem[]
+  payments          Payment[]
+  manufacturingJobs ManufacturingJob[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([orderNumber])
+  @@index([userId])
+}
+
+model OrderItem {
+  id                  String       @id @default(uuid())
+  orderId             String
+  order               Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId           String?
+  product             Product?     @relation(fields: [productId], references: [id])
+  customCableId       String?
+  customCable         CustomCable? @relation(fields: [customCableId], references: [id])
+  itemType            String
+  title               String
+  quantity            Int          @default(1)
+  unitPrice           Decimal      @db.Decimal(10, 2)
+  totalPrice          Decimal      @db.Decimal(10, 2)
+  customCableSnapshot Json?
+  createdAt           DateTime     @default(now())
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  orderId           String
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider          String        @default("RAZORPAY")
+  razorpayOrderId   String?       @unique
+  razorpayPaymentId String?       @unique
+  razorpaySignature String?
+  amount            Decimal       @db.Decimal(10, 2)
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  rawWebhookData    Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([razorpayOrderId])
+}
+
+model ManufacturingJob {
+  id              String      @id @default(uuid())
+  jobTicketNumber String      @unique
+  orderId         String
+  order           Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItemId     String
+  status          OrderStatus @default(MANUFACTURING)
+  assignedTo      String?
+  specDocUrl      String?
+  wiringSnapshot  Json
+  technicianNotes String?
+  qaPassedAt      DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model Coupon {
+  id             String    @id @default(uuid())
+  code           String    @unique
+  discountType   String
+  discountValue  Decimal   @db.Decimal(10, 2)
+  minOrderAmount Decimal?  @db.Decimal(10, 2)
+  maxDiscount    Decimal?  @db.Decimal(10, 2)
+  usageLimit     Int?
+  usageCount     Int       @default(0)
+  expiresAt      DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+}
+
+model Wishlist {
+  id        String         @id @default(uuid())
+  userId    String         @unique
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WishlistItem[]
+  createdAt DateTime       @default(now())
+}
+
+model WishlistItem {
+  id         String   @id @default(uuid())
+  wishlistId String
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("INFO")
+  isRead    Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+}
