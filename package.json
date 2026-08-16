@@ -13,12 +13,13 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "prisma:generate": "prisma generate",
-    "prisma:seed": "ts-node --transpile-only prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "prisma": "^6.4.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.23.12",
     "typescript": "^5.7.0"
   },
   "dependencies": {
